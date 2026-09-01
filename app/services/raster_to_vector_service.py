@@ -92,7 +92,14 @@ def _run_raster_to_vector(raster_file, band, field_name, ignore_value, dissolve,
 
     out = save_vector_result(gdf, name, db_connection, schema_name, output_layer)
     out.update({"source_raster": raster_file, "band": band,
-                "windows": len(windows), "dissolved": dissolve})
+                "windows": len(windows), "dissolved": dissolve,
+                "georeferenced": crs is not None})
+    if crs is None:
+        # save_vector_result stamps EPSG:4326 on anything CRS-less. For a plain
+        # PNG/JPEG that is a lie - the coordinates are pixel offsets, not
+        # degrees - so say so instead of letting it pass silently.
+        out["warning"] = ("source raster has no CRS; output coordinates are "
+                          "pixel offsets, not real-world coordinates")
     return out
 
 

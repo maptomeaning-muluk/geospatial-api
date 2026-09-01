@@ -92,6 +92,62 @@ Leave `JWT_TOKEN` blank in `.env` to disable auth while developing.
 
 ---
 
+## What each endpoint accepts
+
+Everything in this section was measured against the running service, not
+assumed.
+
+### Input format per endpoint
+
+| Endpoint | Accepts |
+|---|---|
+| `*-from-table` | Any PostGIS table with a `geometry`/`geography` column. The column may be named anything — it is looked up in `information_schema`. |
+| `*-from-geojson` | **GeoJSON only** (a `FeatureCollection`, `.geojson`/`.json`, UTF-8). A `.gpkg`/`.shp`/`.zip` upload is rejected with `400 Invalid GeoJSON file.` Convert first, or load into PostGIS and use the `-from-table` form. |
+| `raster-to-vector-from-file` | A local path or an `s3://bucket/key` URI to any GDAL-readable raster. |
+| `raster-to-vector-from-upload` | An uploaded raster file (see raster formats below). |
+
+### Vector geometry types
+
+| Tool | Point | Line | Polygon | Multi\* | Notes |
+|---|:--:|:--:|:--:|:--:|---|
+| Buffer | ✅ | ✅ | ✅ | ✅ | See the cap-style trap below. |
+| Split (`attribute`) | ✅ | ✅ | ✅ | ✅ | Splits on any column. |
+| Split (`grid`) | ✅ | ✅ | ✅ | ✅ | Clips to tiles, keeping the input's geometry type. |
+| Split (`parts`) | ✅ | ✅ | ✅ | ✅ | Only meaningful for Multi\* input — explodes to single parts. |
+| Combine | ✅ | ✅ | ✅ | ✅ | Mixed types allowed; the result is a mixed layer. `dissolve` is really only meaningful within one type. |
+| Trim — **input** | ✅ | ✅ | ✅ | ✅ | |
+| Trim — **mask** | ❌ | ❌ | ✅ | ✅ | The mask must be **(Multi)Polygon**. A point/line mask fails with `'mask' should be ... (Multi)Polygon`. A `bbox` always works. |
+| Vector→Raster | ✅ | ✅ | ✅ | ✅ | Burns with `all_touched=True`, so thin lines and single points still produce pixels. |
+
+**Buffer cap-style trap.** `cap="flat"` or `"square"` on **Point** input returns
+**zero features**. That is GEOS behaviour, not a bug — a flat cap is only
+defined for a geometry with direction. Use `cap="round"` for points.
+
+### Raster formats
+
+| Input | Works | What you get |
+|---|:--:|---|
+| **GeoTIFF** (`.tif`/`.tiff`, with CRS) | ✅ | The intended input. CRS and transform are carried through to the output geometry. |
+| `.img`, `.vrt`, `.jp2`, any GDAL format | ✅ | Read through rasterio/GDAL; georeferencing preserved. |
+| **PNG** (no CRS) | ⚠️ | Vectorises, but the coordinates are **pixel offsets**, not real-world. The result carries `"georeferenced": false` and a `warning`. |
+| **JPEG** | ⚠️❌ | Same CRS problem, **plus JPEG is lossy**: a 4-class test image came back as **80 polygons instead of 4**, because compression noise breaks up the flat colour blocks. Do not use JPEG for classified rasters. |
+
+Output rasters are always single-band `float32` GeoTIFF, deflate-compressed and
+tiled.
+
+### Output geometry
+
+| Tool | Produces |
+|---|---|
+| Buffer | Polygon (MultiPolygon when `dissolve=true`) |
+| Split | Same type as the input, one dataset per part |
+| Combine | Same type(s) as the inputs |
+| Trim | Same type as the input |
+| Raster→Vector | Polygon, one per contiguous same-value region (`dissolve=true` merges by value) |
+| Vector→Raster | Single-band float32 GeoTIFF |
+
+---
+
 ## Example
 
 Submit a buffer over an existing PostGIS table:

@@ -82,6 +82,19 @@ def drop_empty(gdf):
     return gdf[geom.notna() & ~geom.is_empty]
 
 
+def crs_text(crs):
+    """Compact CRS label - "EPSG:32643" rather than 600 characters of WKT."""
+    if crs is None:
+        return None
+    try:
+        from pyproj import CRS as _CRS
+        parsed = _CRS.from_user_input(crs)
+        epsg = parsed.to_epsg()
+        return f"EPSG:{epsg}" if epsg else (parsed.to_string() or str(crs))
+    except Exception:
+        return str(crs)
+
+
 def ensure_crs(gdf, epsg=4326):
     if gdf.crs is None:
         gdf.set_crs(epsg=epsg, inplace=True)
@@ -117,7 +130,7 @@ def save_vector_result(gdf, name, db_connection=None, schema_name=None,
 
     gdf = ensure_crs(drop_empty(gdf))
     result = {"feature_count": int(len(gdf)),
-              "crs": str(gdf.crs) if gdf.crs else None}
+              "crs": crs_text(gdf.crs)}
 
     geojson_path = os.path.join(output_dir(), f"{name}.geojson")
     gdf.to_file(geojson_path, driver="GeoJSON")
