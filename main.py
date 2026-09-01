@@ -38,8 +38,18 @@ app.include_router(process_routes.router, prefix="/api/process",
                    tags=["Processing Operations"])
 
 
-@app.get("/health", tags=["Health"])
+@app.get("/health", tags=["Health"], summary="Liveness probe (no auth required)",
+         response_description="Service name and status")
 def health():
+    """
+    Liveness check. The only endpoint that does not need a bearer token.
+
+    ### Output
+
+    ```json
+    {"status": "ok", "service": "GeoSpatial API"}
+    ```
+    """
     return {"status": "ok", "service": "GeoSpatial API"}
 
 
@@ -83,8 +93,37 @@ def custom_openapi():
     for path in openapi_schema["paths"].values():
         for method in path.values():
             method.setdefault("security", [{"BearerAuth": []}])
+
+    _inject_request_examples(openapi_schema)
+
     app.openapi_schema = openapi_schema
     return app.openapi_schema
+
+
+def _inject_request_examples(schema):
+    """Copy each route's `openapi_examples` into the OpenAPI requestBody.
+
+    FastAPI merges several `Body(...)` params into one generated `Body_*` model
+    and discards their per-field examples, so an endpoint taking
+    `payload` + `params` shows no example in Swagger. The routes attach whole
+    request bodies to the endpoint function instead; this puts them where
+    Swagger's "Try it out" will find them, leaving the generated schema `$ref`
+    untouched.
+    """
+    from fastapi.routing import APIRoute
+
+    for route in app.routes:
+        if not isinstance(route, APIRoute):
+            continue
+        examples = getattr(route.endpoint, "openapi_examples", None)
+        if not examples:
+            continue
+        operation = schema.get("paths", {}).get(route.path, {})
+        for method in (m.lower() for m in route.methods):
+            body = operation.get(method, {}).get("requestBody", {})
+            content = body.get("content", {}).get("application/json")
+            if content is not None:
+                content["examples"] = examples
 
 
 app.openapi = custom_openapi

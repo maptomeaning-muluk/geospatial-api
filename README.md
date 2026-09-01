@@ -9,31 +9,68 @@ cluster, so you can submit more jobs and poll
 
 ---
 
-## Run
+## Commands
 
-**Docker (everything)**
+### Run with Docker (everything: PostGIS + Dask + API)
 
 ```bash
-cp .env.example .env      # then edit DB_PASSWORD / JWT_TOKEN / aws keys
-docker compose up -d --build
-docker compose up -d --scale dask-worker=6      # more compute
+cp .env.example .env                       # edit DB_PASSWORD / JWT_TOKEN / aws keys
+docker compose up -d --build               # start the whole stack
+docker compose up -d --scale dask-worker=6 # more compute, any time
+docker compose logs -f api                 # follow the API log
+docker compose ps                          # what is running
+docker compose down                        # stop
+docker compose down -v                     # stop and wipe the database
+```
+
+### Run locally (no Docker)
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate                     # Windows
+source .venv/bin/activate                  # Linux / macOS
+
+pip install -r requirements.txt
+cp .env.example .env                       # set DB_HOST=localhost
+
+# a PostGIS to point at, if you do not have one:
+docker run -d --name gis-pg -p 5432:5432 \
+  -e POSTGRES_DB=gisdb -e POSTGRES_USER=gis -e POSTGRES_PASSWORD=gis \
+  postgis/postgis:16-3.4
+
+python main.py                             # reads PORT from .env (default 5000)
+# or, with reload while developing:
+uvicorn main:app --reload --host 0.0.0.0 --port 5000
+```
+
+With `DASK_SCHEDULER_ADDRESS` blank the app starts its own LocalCluster, so a
+laptop needs nothing else. The PostGIS extension and the `processing` table are
+created on startup.
+
+### Verify it is up
+
+```bash
+curl http://localhost:5000/health
+curl -H "Authorization: Bearer $JWT_TOKEN" http://localhost:5000/api/process/v1/cluster
 ```
 
 | | |
 |---|---|
 | API + Swagger | <http://localhost:5000/docs> |
+| ReDoc | <http://localhost:5000/redoc> |
 | Dask dashboard | <http://localhost:8787> |
 
-**Local**
+### Run the tests
 
 ```bash
-pip install -r requirements.txt
-cp .env.example .env       # set DB_HOST=localhost
-python main.py             # or: uvicorn main:app --reload --port 5000
-```
+python tests/seed_data.py                  # demo tables + testdata/ files
+uvicorn main:app --port 5000               # in another shell
 
-With `DASK_SCHEDULER_ADDRESS` blank the app starts its own LocalCluster, so a
-laptop needs nothing else. The `processing` table is created on startup.
+export PYTHONPATH=.                        # Windows: set PYTHONPATH=.
+python tests/test_api.py                   # 35 endpoint checks
+python tests/test_concurrency.py           # submission is non-blocking
+python tests/verify_outputs.py             # geometry actually written
+```
 
 ---
 
@@ -184,6 +221,111 @@ curl -X POST http://localhost:5000/api/vector/v1/buffer-from-geojson \
   -F "file=@roads.geojson" -F "distance=500" -F "unit=meters" \
   -F "business_id=b1" -F "project_id=p1"
 ```
+
+---
+
+## Request / response format
+
+Same shape for every tool: submit, get a `uuid`, poll.
+
+### 1. Submit
+
+**`-from-table`** endpoints take `application/json` with two objects,
+`payload` (where to connect, who is asking, where to write) and `params`
+(the tool's own settings):
+
+```json
+{
+  "payload": {
+    "db_connection": {"host": "localhost", "port": 5432, "dbname": "gisdb",
+                      "user": "gis", "password": "***"},
+    "project_id": "p1",
+    "business_id": "b1",
+    "file_path": null,
+    "output_layer": "roads_buffer_500m"
+  },
+  "params": {
+    "schema_name": "public", "table_name": "roads",
+    "where": "class = 'highway'",
+    "distance": 500, "unit": "meters", "dissolve": false
+  }
+}
+```
+
+The raster endpoints add a third object, `raster_payload`, plus
+`storage_method` (`temp` | `own` | `alloc`).
+
+**`-from-geojson` / `-from-upload`** endpoints take `multipart/form-data`:
+the file field plus each parameter as a form field.
+
+### 2. Immediate response — HTTP 200, in milliseconds
+
+```json
+{
+  "uuid": "3f9c1e2b-7a41-4d0e-9c33-2b8a1f5e6d70",
+  "status": "processing",
+  "message": "Buffer job submitted. Poll /api/process/v1/status/{uuid}."
+}
+```
+
+Nothing has run yet. Keep submitting other jobs.
+
+### 3. Poll — `GET /api/process/v1/status/{uuid}`
+
+```json
+{
+  "message": "Processing record fetched successfully",
+  "data": {
+    "uuid": "3f9c1e2b-...",
+    "tool_name": "buffer",
+    "data_type": "vector",
+    "status": "completed",
+    "business_id": "b1",
+    "project_id": "p1",
+    "input_layer": "roads",
+    "overlay_layer": null,
+    "output_layer": "roads_buffer_500m",
+    "start_time": "2026-09-01T12:45:26",
+    "end_time": "2026-09-01T12:45:29",
+    "message": "Operation completed successfully",
+    "result": {
+      "feature_count": 25,
+      "crs": "EPSG:4326",
+      "file": "./output/roads_buffer_500m.geojson",
+      "table": "public.roads_buffer_500m"
+    }
+  }
+}
+```
+
+`status` is `processing` | `completed` | `failed`. While processing, `result`
+is `null`. On failure, `message` carries the reason.
+
+### The `result` block per tool
+
+| Tool | `result` fields |
+|---|---|
+| Buffer | `feature_count` `crs` `file` `table`* `distance` `unit` `distance_in_crs_units` `dissolved` |
+| Split | `mode` `parts` `outputs[]` — each with `key` `feature_count` `crs` `file` `table`* |
+| Combine | `feature_count` `crs` `file` `table`* `input_layers` `dissolved` |
+| Trim | `feature_count` `crs` `file` `table`* `operation` (`clip`/`erase`) `input_features` |
+| Vector→Raster | `output` `width` `height` `pixel_size` `pixel_unit` `crs` `features` |
+| Raster→Vector | `feature_count` `crs` `file` `table`* `band` `windows` `dissolved` `georeferenced` `source_raster` |
+
+\* `table` only when `output_layer` was supplied.
+
+### Errors
+
+| Code | When |
+|---|---|
+| `400` | Missing a required combination — e.g. `mode=attribute` without `split_field`, or Trim with neither `overlay_table` nor `bbox`. Also a non-GeoJSON upload. |
+| `401` | Missing or wrong `Authorization: Bearer <JWT_TOKEN>` |
+| `404` | Unknown job uuid |
+| `422` | Body fails validation — missing field, bad enum (e.g. `unit: "parsecs"`) |
+| `500` | Unexpected server error while submitting |
+
+A failure *inside* the job is not an HTTP error — submission already returned
+`200`. The job ends with `status: "failed"` and the reason in `message`.
 
 ---
 
