@@ -1,0 +1,47 @@
+# Ranges rather than hard pins: the exact versions inherited from
+# python_services (geopandas 0.14.3 / numpy 1.26.4 / fiona 1.9.6) predate
+# Python 3.12 wheels for parts of the stack. The lower bounds below are the
+# oldest releases this code is written against; the "tested with" column is the
+# combination the endpoint suite was actually run on.
+#
+#                          tested with
+# fastapi                  0.116.2
+# geopandas                1.1.4
+# shapely                  2.1.2
+# rasterio                 1.5.1
+# dask / distributed       2026.8.0
+# pandas                   3.0.5
+# numpy                    2.5.2
+# Python                   3.12.10
+
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+python-dotenv>=1.0
+
+# Database
+sqlalchemy>=2.0.29,<3.0
+psycopg2-binary>=2.9.9
+geoalchemy2>=0.14
+
+# Geospatial processing
+geopandas>=0.14.3
+shapely>=2.0.3
+pyproj>=3.6
+rtree>=1.2
+rasterio>=1.3.9
+
+# Parallel processing
+dask[distributed]>=2024.4.1
+distributed>=2024.4.1
+
+# Data handling
+pandas>=2.2
+numpy>=1.26
+
+# AWS S3
+boto3>=1.34
+botocore>=1.34
+
+# Utilities
+requests>=2.31

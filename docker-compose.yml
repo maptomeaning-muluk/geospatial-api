@@ -1,0 +1,86 @@
+# cp .env.example .env   then   docker compose up -d --build
+#
+#   API      http://localhost:5000/docs
+#   Dask UI  http://localhost:8787
+#
+# More compute:  docker compose up -d --scale dask-worker=6
+
+services:
+  postgis:
+    image: postgis/postgis:16-3.4
+    container_name: gis-postgis
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-gisdb}
+      POSTGRES_USER: ${DB_USER:-gis}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-gis_password_change_me}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-gis} -d ${DB_NAME:-gisdb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [gisnet]
+
+  dask-scheduler:
+    build: .
+    image: geospatial-api:1.0.0
+    container_name: gis-dask-scheduler
+    restart: unless-stopped
+    command: dask scheduler --host 0.0.0.0 --port 8786 --dashboard-address :8787
+    ports:
+      - "8786:8786"
+      - "8787:8787"
+    volumes:
+      - gis-output:/app/output
+    networks: [gisnet]
+
+  dask-worker:
+    build: .
+    image: geospatial-api:1.0.0
+    restart: unless-stopped
+    command: dask worker tcp://dask-scheduler:8786 --nworkers 1 --nthreads 2 --memory-limit 2GB
+    env_file: [.env]
+    environment:
+      DB_HOST: postgis
+      DASK_SCHEDULER_ADDRESS: tcp://dask-scheduler:8786
+      OUTPUT_DIR: /app/output
+    volumes:
+      # Shared with the API: a worker writes the output the API later reports.
+      - gis-output:/app/output
+    depends_on:
+      dask-scheduler: {condition: service_started}
+      postgis: {condition: service_healthy}
+    deploy:
+      replicas: 3
+    networks: [gisnet]
+
+  api:
+    build: .
+    image: geospatial-api:1.0.0
+    container_name: gis-api
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      DB_HOST: postgis
+      DASK_SCHEDULER_ADDRESS: tcp://dask-scheduler:8786
+      OUTPUT_DIR: /app/output
+    ports:
+      - "5000:5000"
+    volumes:
+      - gis-output:/app/output
+    depends_on:
+      postgis: {condition: service_healthy}
+      dask-scheduler: {condition: service_started}
+    networks: [gisnet]
+
+volumes:
+  pgdata:
+  gis-output:
+
+networks:
+  gisnet:
+    driver: bridge

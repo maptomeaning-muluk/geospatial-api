@@ -1,0 +1,27 @@
+{
+"type": "FeatureCollection",
+"name": "wells",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "id": 0, "kind": "well" }, "geometry": { "type": "Point", "coordinates": [ 73.8, 18.5 ] } },
+{ "type": "Feature", "properties": { "id": 1, "kind": "tank" }, "geometry": { "type": "Point", "coordinates": [ 73.802, 18.5 ] } },
+{ "type": "Feature", "properties": { "id": 2, "kind": "well" }, "geometry": { "type": "Point", "coordinates": [ 73.804, 18.5 ] } },
+{ "type": "Feature", "properties": { "id": 3, "kind": "tank" }, "geometry": { "type": "Point", "coordinates": [ 73.806, 18.5 ] } },
+{ "type": "Feature", "properties": { "id": 4, "kind": "well" }, "geometry": { "type": "Point", "coordinates": [ 73.808, 18.5 ] } },
+{ "type": "Feature", "properties": { "id": 5, "kind": "tank" }, "geometry": { "type": "Point", "coordinates": [ 73.8, 18.502 ] } },
+{ "type": "Feature", "properties": { "id": 6, "kind": "well" }, "geometry": { "type": "Point", "coordinates": [ 73.802, 18.502 ] } },
+{ "type": "Feature", "properties": { "id": 7, "kind": "tank" }, "geometry": { "type": "Point", "coordinates": [ 73.804, 18.502 ] } },
+{ "type": "Feature", "properties": { "id": 8, "kind": "well" }, "geometry": { "type": "Point", "coordinates": [ 73.806, 18.502 ] } },
+{ "type": "Feature", "properties": { "id": 9, "kind": "tank" }, "geometry": { "type": "Point", "coordinates": [ 73.808, 18.502 ] } },
+{ "type": "Feature", "properties": { "id": 10, "kind": "well" }, "geometry": { "type": "Point", "coordinates": [ 73.8, 18.504 ] } },
+{ "type": "Feature", "properties": { "id": 11, "kind": "tank" }, "geometry": { "type": "Point", "coordinates": [ 73.802, 18.504 ] } },
+{ "type": "Feature", "properties": { "id": 12, "kind": "well" }, "geometry": { "type": "Point", "coordinates": [ 73.804, 18.504 ] } },
+{ "type": "Feature", "properties": { "id": 13, "kind": "tank" }, "geometry": { "type": "Point", "coordinates": [ 73.806, 18.504 ] } },
+{ "type": "Feature", "properties": { "id": 14, "kind": "well" }, "geometry": { "type": "Point", "coordinates": [ 73.808, 18.504 ] } },
+{ "type": "Feature", "properties": { "id": 15, "kind": "tank" }, "geometry": { "type": "Point", "coordinates": [ 73.8, 18.506 ] } },
+{ "type": "Feature", "properties": { "id": 16, "kind": "well" }, "geometry": { "type": "Point", "coordinates": [ 73.802, 18.506 ] } },
+{ "type": "Feature", "properties": { "id": 17, "kind": "tank" }, "geometry": { "type": "Point", "coordinates": [ 73.804, 18.506 ] } },
+{ "type": "Feature", "properties": { "id": 18, "kind": "well" }, "geometry": { "type": "Point", "coordinates": [ 73.806, 18.506 ] } },
+{ "type": "Feature", "properties": { "id": 19, "kind": "tank" }, "geometry": { "type": "Point", "coordinates": [ 73.808, 18.506 ] } }
+]
+}
